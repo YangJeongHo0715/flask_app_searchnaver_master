@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naver News Crawling</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+            height: 100vh; /* 화면 전체 높이 사용 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            width: 90%;
+            max-width: 1800px; /* 최대 너비 설정 */
+            height: 90%;
+            max-height: 800px; /* 최대 높이 설정 */
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: row; /* 가로로 요소 배치 */
+            overflow: hidden; /* 넘치는 컨텐츠를 숨김 */
+        }
+        .left-panel, .right-panel {
+            flex: 1; /* 컨텐츠 영역이 남은 공간을 채우도록 설정 */
+            padding: 20px;
+            overflow-y: auto; /* 필요시 스크롤바 표시 */
+        }
+        .left-panel {
+            border-right: 1px solid #ddd; /* 왼쪽 패널에 오른쪽 경계선 추가 */
+        }
+        h1, h2 {
+            text-align: center;
+            margin: 20px 0;
+        }
+        form {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        form label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        form input[type="text"], form select {
+            width: 200px;
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        form input[type="submit"] {
+            padding: 8px 20px;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        form input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            margin-bottom: 20px;
+            border-collapse: collapse;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        table thead {
+            background-color: #007BFF;
+            color: white;
+        }
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        table th {
+            font-weight: bold;
+        }
+        table tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+        canvas#keywordChart {
+            width: 100%; /* 차트의 너비를 100%로 설정 */
+            height: 400px; /* 차트의 높이를 400px로 설정 */
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-panel">
+            <h1>Naver News Crawling</h1>
+            <form method="POST">
+                <label for="maxpage">최대 크롤링할 페이지 수:</label>
+                <input type="text" id="maxpage" name="maxpage">
+                <label for="query">검색어:</label>
+                <input type="text" id="query" name="query">
+                <br><br>
+                <label for="sort">뉴스 검색 방식:</label>
+                <select id="sort" name="sort">
+                    <option value="0">관련도순</option>
+                    <option value="1">최신순</option>
+                    <option value="2">오래된순</option>
+                </select>
+                <br><br>
+                <label for="s_date">시작 날짜 (YYYY.MM.DD):</label>
+                <input type="text" id="s_date" name="s_date">
+                <br>
+                <label for="e_date">끝 날짜 (YYYY.MM.DD):</label>
+                <input type="text" id="e_date" name="e_date">
+                <br><br>
+                <input type="submit" value="크롤링 시작">
+            </form>
+
+            <div class="content">
+                <h2>크롤링 결과</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>날짜</th>
+                            <th>제목</th>
+                            <th>신문사</th>
+                            <th>내용 요약</th>
+                            <th>링크</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in data %}
+                        <tr>
+                            <td>{{ row['date'] }}</td>
+                            <td>{{ row['title'] }}</td>
+                            <td>{{ row['source'] }}</td>
+                            <td>{{ row['contents'] }}</td>
+                            <td><a href="{{ row['link'] }}" target="_blank">링크</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="content">
+                {% if keywords_data %}
+                <h2>추가된 키워드 빈도수</h2>
+                <canvas id="keywordChart"></canvas>
+                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                <script>
+                    var keywordsData = {{ keywords_data | tojson }};
+
+                    var ctx = document.getElementById('keywordChart').getContext('2d');
+                    var myChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: keywordsData.map(function(item) { return item.keyword; }),
+                            datasets: [{
+                                label: '빈도수',
+                                data: keywordsData.map(function(item) { return item.count; }),
+                                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                yAxes: [{
+                                    ticks: {
+                                        beginAtZero: true,
+                                        stepSize: 1
+                                    }
+                                }]
+                            },
+                            legend: {
+                                display: false
+                            }
+                        }
+                    });
+                </script>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
